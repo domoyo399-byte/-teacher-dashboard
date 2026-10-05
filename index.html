@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>自由教师工作台</title>
+<style>
+  :root{
+    --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
+    --line:#dfe6e1; --accent:#4f7d61; --accent-soft:#eaf2ec;
+    --warn:#8a6a2f; --warn-soft:#faf3e2; --danger:#9a4b4b; --danger-soft:#faecec;
+    --shadow:0 10px 28px rgba(44,63,51,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  button,input,select,textarea{font:inherit}
+  .app{max-width:1180px;margin:0 auto;padding:16px 16px 92px}
+  header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .brand h1{font-size:22px;margin:0}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .top-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.soft{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+  .btn.danger{background:var(--danger-soft);border-color:transparent;color:var(--danger)}
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+  .tab{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 8px;cursor:pointer}
+  .tab.active{background:var(--accent-soft);border-color:#c9dccc;color:var(--accent);font-weight:700}
+  .panel{display:none}.panel.active{display:block}
+  .toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
+  .month-nav{display:flex;gap:8px;align-items:center}
+  .month-title{font-size:18px;font-weight:800;min-width:150px;text-align:center}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+  .metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:24px;font-weight:800;margin-top:6px}.metric .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  .calendar-wrap{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+  .calendar{min-width:850px}
+  .week-head,.week{display:grid;grid-template-columns:repeat(7,1fr)}
+  .week-head>div{padding:10px;text-align:center;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
+  .day{min-height:132px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;background:#fff}
+  .day:nth-child(7n){border-right:none}.day.muted{background:#fafbfa;color:#a2aaa5}
+  .day.today{outline:2px solid #bfd4c3;outline-offset:-2px}
+  .day-num{font-size:12px;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between}
+  .session{border-radius:9px;padding:6px 7px;margin:5px 0;font-size:11px;line-height:1.35;cursor:pointer;border:1px solid transparent}
+  .s-scheduled{background:#eef3ff}.s-completed{background:#eaf5ec}.s-leave,.s-cancelled{background:#faecec}.s-makeup{background:#fff4dc}
+  .session .student{font-weight:800}.session .meta{color:#5f6c64;margin-top:2px}
+  .section-title{font-size:16px;font-weight:800;margin:0 0 10px}
+  .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .field{display:flex;flex-direction:column;gap:5px}.field label{font-size:12px;color:var(--muted)}
+  .field input,.field select,.field textarea{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+  .span2{grid-column:span 2}
+  .weekday-row{display:flex;flex-wrap:wrap;gap:6px}.weekday-row label{display:flex;align-items:center;gap:4px;background:#f7f8f7;border:1px solid var(--line);padding:7px 9px;border-radius:9px}
+  .list{display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+  .row-main{min-width:0}.row-title{font-weight:800}.row-sub{font-size:12px;color:var(--muted);margin-top:3px;white-space:normal}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden}
+  th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);font-size:13px}
+  th{color:var(--muted);font-weight:700;background:#fafbfa}
+  .empty{padding:28px;text-align:center;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.55}
+  dialog{border:none;border-radius:16px;max-width:620px;width:calc(100% - 28px);padding:0;box-shadow:0 30px 80px rgba(20,30,24,.25)}
+  dialog::backdrop{background:rgba(20,28,23,.35)}
+  .modal{padding:18px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h3{margin:0}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+  .danger-text{color:var(--danger)}.status-pill{display:inline-block;border-radius:99px;padding:3px 8px;font-size:11px}
+  @media(max-width:760px){
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .form-grid{grid-template-columns:1fr}.span2{grid-column:auto}
+    .tabs{grid-template-columns:repeat(2,1fr)}
+    .app{padding:12px 10px 90px}
+    header{align-items:flex-start;flex-direction:column}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>自由教师工作台</h1>
+      <p>课表是唯一数据源，收入页自动跟着变化。</p>
+    </div>
+    <div class="top-actions">
+      <button class="btn soft" id="quickAdd">＋ 新增课</button>
+      <button class="btn primary" id="openRecurring">＋ 周期课</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="schedule">月课表</button>
+    <button class="tab" data-tab="income">收入统计</button>
+    <button class="tab" data-tab="students">学生管理</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </div>
+
+  <section class="panel active" id="schedule">
+    <div class="toolbar">
+      <div class="month-nav">
+        <button class="btn" id="prevMonth">‹</button>
+        <div class="month-title" id="monthTitle"></div>
+        <button class="btn" id="nextMonth">›</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="todayBtn">本月</button>
+        <button class="btn" id="copyMonthBtn">复制固定课到下月</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card metric"><div class="label">预计到账</div><div class="value" id="mProjected">¥0</div><div class="sub">已完成 + 已排课 + 补课</div></div>
+      <div class="card metric"><div class="label">已完成收入</div><div class="value" id="mEarned">¥0</div><div class="sub">只算“已完成”</div></div>
+      <div class="card metric"><div class="label">取消/请假损失</div><div class="value" id="mLost">¥0</div><div class="sub">按当前课价估算</div></div>
+      <div class="card metric"><div class="label">完成课时</div><div class="value" id="mHours">0h</div><div class="sub">方便看工作量</div></div>
+    </div>
+
+    <div class="calendar-wrap">
+      <div class="calendar">
+        <div class="week-head"><div>周一</div><div>周二</div><div>周三</div><div>周四</div><div>周五</div><div>周六</div><div>周日</div></div>
+        <div id="calendarBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="income">
+    <div class="toolbar">
+      <div class="month-nav">
+        <button class="btn" id="prevIncomeMonth">‹</button>
+        <div class="month-title" id="incomeMonthTitle"></div>
+        <button class="btn" id="nextIncomeMonth">›</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card metric"><div class="label">保底收入</div><div class="value" id="iFloor">¥0</div><div class="sub">只统计已完成</div></div>
+      <div class="card metric"><div class="label">当前预计</div><div class="value" id="iProjected">¥0</div><div class="sub">按当前排课全部正常进行</div></div>
+      <div class="card metric"><div class="label">满课收入</div><div class="value" id="iFull">¥0</div><div class="sub">包含本月已取消/请假的原计划收入</div></div>
+      <div class="card metric"><div class="label">本月损失</div><div class="value" id="iLost">¥0</div><div class="sub">请假/取消造成的预计减少</div></div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">按来源拆分</h3>
+      <div style="overflow:auto">
+        <table>
+          <thead><tr><th>来源</th><th>税前/原价</th><th>代扣</th><th>预计到账</th><th>已完成到账</th></tr></thead>
+          <tbody id="sourceTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="students">
+    <div class="toolbar">
+      <h3 class="section-title" style="margin:0">学生与收入来源</h3>
+      <button class="btn primary" id="addStudentBtn">＋ 添加学生</button>
+    </div>
+    <div class="card">
+      <div class="list" id="studentList"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="settings">
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="section-title">收入来源设置</h3>
+      <p class="hint">默认已经放入「新东方 20%代扣」和「私教 0%」。这里的比例用于估算当月现金到账，不等同于年度最终应纳税额。</p>
+      <div class="list" id="sourceList"></div>
+      <button class="btn" id="addSourceBtn" style="margin-top:10px">＋ 添加来源</button>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">备份与迁移</h3>
+      <p class="hint">数据默认保存在当前浏览器。建议每月导出一次 JSON 备份；换手机、清浏览器数据之前也要导出。</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="exportBtn">导出 JSON</button>
+        <label class="btn" style="cursor:pointer">导入 JSON<input id="importInput" type="file" accept="application/json" hidden></label>
+        <button class="btn danger" id="resetBtn">清空全部数据</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<dialog id="sessionDialog">
+  <form method="dialog" class="modal" id="sessionForm">
+    <div class="modal-head"><h3 id="sessionDialogTitle">新增课</h3><button class="btn" value="cancel">关闭</button></div>
+    <div class="form-grid">
+      <div class="field"><label>学生</label><select id="fStudent"></select></div>
+      <div class="field"><label>收入来源</label><select id="fSource"></select></div>
+      <div class="field"><label>日期</label><input id="fDate" type="date" required></div>
+      <div class="field"><label>开始时间</label><input id="fTime" type="time"></div>
+      <div class="field"><label>时长（小时）</label><input id="fHours" type="number" min="0.25" step="0.25" value="1"></div>
+      <div class="field"><label>单价（元/小时）</label><input id="fRate" type="number" min="0" step="1" value="0"></div>
+      <div class="field"><label>状态</label>
+        <select id="fStatus">
+          <option value="scheduled">已排课</option>
+          <option value="completed">已完成</option>
+          <option value="leave">学生请假</option>
+          <option value="cancelled">取消</option>
+          <option value="makeup">补课</option>
+        </select>
+      </div>
+      <div class="field"><label>是否已收款</label>
+        <select id="fPaid"><option value="no">未收</option><option value="yes">已收</option></select>
+      </div>
+      <div class="field span2"><label>备注</label><textarea id="fNote" rows="2" placeholder="例如：国庆后复课 / 临时调课 / 补上次请假"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn danger" id="deleteSessionBtn" style="display:none">删除</button>
+      <button type="button" class="btn primary" id="saveSessionBtn">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="recurringDialog">
+  <form method="dialog" class="modal">
+    <div class="modal-head"><h3>生成周期课</h3><button class="btn" value="cancel">关闭</button></div>
+    <div class="form-grid">
+      <div class="field"><label>学生</label><select id="rStudent"></select></div>
+      <div class="field"><label>收入来源</label><select id="rSource"></select></div>
+      <div class="field"><label>开始日期</label><input id="rStart" type="date"></div>
+      <div class="field"><label>结束日期</label><input id="rEnd" type="date"></div>
+      <div class="field"><label>开始时间</label><input id="rTime" type="time"></div>
+      <div class="field"><label>时长（小时）</label><input id="rHours" type="number" min="0.25" step="0.25" value="1"></div>
+      <div class="field"><label>单价（元/小时）</label><input id="rRate" type="number" min="0" step="1" value="0"></div>
+      <div class="field"><label>默认状态</label><select id="rStatus"><option value="scheduled">已排课</option><option value="completed">已完成</option></select></div>
+      <div class="field span2"><label>每周哪几天</label><div class="weekday-row" id="weekdayRow"></div></div>
+      <div class="field span2"><label>备注</label><input id="rNote" placeholder="例如：每周固定课"></div>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn primary" id="generateRecurringBtn">生成</button></div>
+  </form>
+</dialog>
+
+<dialog id="studentDialog">
+  <form method="dialog" class="modal">
+    <div class="modal-head"><h3 id="studentDialogTitle">添加学生</h3><button class="btn" value="cancel">关闭</button></div>
+    <div class="form-grid">
+      <div class="field"><label>学生名称/昵称</label><input id="stName"></div>
+      <div class="field"><label>默认收入来源</label><select id="stSource"></select></div>
+      <div class="field"><label>默认单价（元/小时）</label><input id="stRate" type="number" min="0" step="1"></div>
+      <div class="field"><label>备注</label><input id="stNote"></div>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn primary" id="saveStudentBtn">保存</button></div>
+  </form>
+</dialog>
+
+<dialog id="sourceDialog">
+  <form method="dialog" class="modal">
+    <div class="modal-head"><h3>收入来源</h3><button class="btn" value="cancel">关闭</button></div>
+    <div class="form-grid">
+      <div class="field"><label>名称</label><input id="srcName"></div>
+      <div class="field"><label>代扣比例（%）</label><input id="srcTax" type="number" min="0" max="100" step="0.1" value="0"></div>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn primary" id="saveSourceBtn">保存</button></div>
+  </form>
+</dialog>
+
+<script>
+const LS_KEY='teacher_dashboard_v1';
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-5);
+const money=n=>'¥'+Number(n||0).toFixed(0);
+const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const parseDate=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+const monthLabel=d=>`${d.getFullYear()}年${d.getMonth()+1}月`;
+const statusText={scheduled:'已排课',completed:'已完成',leave:'请假',cancelled:'取消',makeup:'补课'};
+const statusClass={scheduled:'s-scheduled',completed:'s-completed',leave:'s-leave',cancelled:'s-cancelled',makeup:'s-makeup'};
+const weekdays=['周日','周一','周二','周三','周四','周五','周六'];
+
+let state = load();
+let viewMonth = new Date();
+viewMonth = new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1);
+let incomeMonth = new Date(viewMonth);
+let editingSessionId=null, editingStudentId=null, editingSourceId=null;
+
+function seed(){
+  return {
+    sources:[
+      {id:'src_xdf',name:'新东方',taxRate:20},
+      {id:'src_private',name:'私教',taxRate:0}
+    ],
+    students:[],
+    sessions:[]
+  };
+}
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    return raw?JSON.parse(raw):seed();
+  }catch(e){return seed();}
+}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify(state)); renderAll();}
+function getSource(id){return state.sources.find(x=>x.id===id)||{name:'未分类',taxRate:0}}
+function getStudent(id){return state.students.find(x=>x.id===id)||{name:'未命名学生'}}
+function gross(s){return Number(s.hours||0)*Number(s.rate||0)}
+function net(s){const src=getSource(s.sourceId);return gross(s)*(1-Number(src.taxRate||0)/100)}
+function monthSessions(d){const k=monthKey(d);return state.sessions.filter(s=>s.date.startsWith(k))}
+function countsProjected(s){return ['scheduled','completed','makeup'].includes(s.status)}
+function countsEarned(s){return s.status==='completed'}
+function countsLost(s){return ['leave','cancelled'].includes(s.status)}
+
+function renderTabs(){
+  $$('.tab').forEach(b=>b.onclick=()=>{
+    $$('.tab').forEach(x=>x.classList.remove('active'));
+    $$('.panel').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); $('#'+b.dataset.tab).classList.add('active');
+  });
+}
+
+function renderCalendar(){
+  $('#monthTitle').textContent=monthLabel(viewMonth);
+  const sessions=monthSessions(viewMonth);
+  const first=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1);
+  const last=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,0);
+  const offset=(first.getDay()+6)%7;
+  const total=Math.ceil((offset+last.getDate())/7)*7;
+  const start=new Date(first); start.setDate(1-offset);
+  const today=ymd(new Date());
+  let html='';
+  for(let i=0;i<total;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i);
+    const ds=ymd(d), inMonth=d.getMonth()===viewMonth.getMonth();
+    const daySessions=sessions.filter(s=>s.date===ds).sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+    html += `<div class="day ${inMonth?'':'muted'} ${ds===today?'today':''}" data-date="${ds}">
+      <div class="day-num"><span>${d.getDate()}</span><span>${daySessions.length?daySessions.length+'节':''}</span></div>
+      ${daySessions.map(s=>{
+        const st=getStudent(s.studentId), src=getSource(s.sourceId);
+        return `<div class="session ${statusClass[s.status]||''}" data-session="${s.id}">
+          <div class="student">${escapeHtml(st.name)}</div>
+          <div>${s.time?escapeHtml(s.time)+' · ':''}${s.hours}h · ${money(net(s))}</div>
+          <div class="meta">${escapeHtml(src.name)} · ${statusText[s.status]||s.status}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  $('#calendarBody').innerHTML=`<div class="week">${html}</div>`;
+  $$('.session').forEach(el=>el.onclick=e=>{e.stopPropagation();openSession(el.dataset.session)});
+  $$('.day').forEach(el=>el.ondblclick=()=>openSession(null,el.dataset.date));
+
+  const projected=sessions.filter(countsProjected).reduce((a,s)=>a+net(s),0);
+  const earned=sessions.filter(countsEarned).reduce((a,s)=>a+net(s),0);
+  const lost=sessions.filter(countsLost).reduce((a,s)=>a+net(s),0);
+  const hours=sessions.filter(countsEarned).reduce((a,s)=>a+Number(s.hours||0),0);
+  $('#mProjected').textContent=money(projected); $('#mEarned').textContent=money(earned);
+  $('#mLost').textContent=money(lost); $('#mHours').textContent=hours.toFixed(1)+'h';
+}
+
+function renderIncome(){
+  $('#incomeMonthTitle').textContent=monthLabel(incomeMonth);
+  const sessions=monthSessions(incomeMonth);
+  const floor=sessions.filter(countsEarned).reduce((a,s)=>a+net(s),0);
+  const projected=sessions.filter(countsProjected).reduce((a,s)=>a+net(s),0);
+  const full=sessions.reduce((a,s)=>a+net(s),0);
+  const lost=sessions.filter(countsLost).reduce((a,s)=>a+net(s),0);
+  $('#iFloor').textContent=money(floor); $('#iProjected').textContent=money(projected);
+  $('#iFull').textContent=money(full); $('#iLost').textContent=money(lost);
+
+  const rows=state.sources.map(src=>{
+    const arr=sessions.filter(s=>s.sourceId===src.id);
+    const grossProjected=arr.filter(countsProjected).reduce((a,s)=>a+gross(s),0);
+    const netProjected=arr.filter(countsProjected).reduce((a,s)=>a+net(s),0);
+    const netEarned=arr.filter(countsEarned).reduce((a,s)=>a+net(s),0);
+    return `<tr><td>${escapeHtml(src.name)}</td><td>${money(grossProjected)}</td><td>${src.taxRate}%</td><td>${money(netProjected)}</td><td>${money(netEarned)}</td></tr>`;
+  }).join('');
+  $('#sourceTable').innerHTML=rows||`<tr><td colspan="5" class="empty">暂无数据</td></tr>`;
+}
+
+function renderStudents(){
+  const el=$('#studentList');
+  if(!state.students.length){el.innerHTML='<div class="empty">还没有学生。先添加学生，再生成周期课。</div>';return}
+  el.innerHTML=state.students.map(st=>{
+    const src=getSource(st.sourceId);
+    return `<div class="row">
+      <div class="row-main"><div class="row-title">${escapeHtml(st.name)}</div>
+      <div class="row-sub">${escapeHtml(src.name)} · 默认 ${money(st.rate)}/小时${st.note?' · '+escapeHtml(st.note):''}</div></div>
+      <div class="row-actions"><button class="btn" data-edit-st="${st.id}">编辑</button><button class="btn danger" data-del-st="${st.id}">删除</button></div>
+    </div>`;
+  }).join('');
+  $$('[data-edit-st]').forEach(b=>b.onclick=()=>openStudent(b.dataset.editSt));
+  $$('[data-del-st]').forEach(b=>b.onclick=()=>deleteStudent(b.dataset.delSt));
+}
+
+function renderSources(){
+  const el=$('#sourceList');
+  el.innerHTML=state.sources.map(src=>`<div class="row">
+    <div class="row-main"><div class="row-title">${escapeHtml(src.name)}</div><div class="row-sub">代扣 ${src.taxRate}%</div></div>
+    <div class="row-actions"><button class="btn" data-edit-src="${src.id}">编辑</button>${['src_xdf','src_private'].includes(src.id)?'':`<button class="btn danger" data-del-src="${src.id}">删除</button>`}</div>
+  </div>`).join('');
+  $$('[data-edit-src]').forEach(b=>b.onclick=()=>openSource(b.dataset.editSrc));
+  $$('[data-del-src]').forEach(b=>b.onclick=()=>deleteSource(b.dataset.delSrc));
+}
+
+function renderSelects(){
+  const studentOpts = state.students.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  ['#fStudent','#rStudent'].forEach(sel=>$(sel).innerHTML=studentOpts||'<option value="">请先添加学生</option>');
+  const srcOpts = state.sources.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}（${s.taxRate}%）</option>`).join('');
+  ['#fSource','#rSource','#stSource'].forEach(sel=>$(sel).innerHTML=srcOpts);
+}
+function renderAll(){renderSelects();renderCalendar();renderIncome();renderStudents();renderSources()}
+
+function openSession(id,date){
+  if(!state.students.length){alert('请先在“学生管理”里添加学生。');return}
+  editingSessionId=id||null;
+  $('#sessionDialogTitle').textContent=id?'编辑课程':'新增课程';
+  $('#deleteSessionBtn').style.display=id?'inline-block':'none';
+  let s=id?state.sessions.find(x=>x.id===id):null;
+  if(!s){
+    const st=state.students[0], d=date||ymd(new Date());
+    s={studentId:st.id,sourceId:st.sourceId||state.sources[0].id,date:d,time:'',hours:1,rate:st.rate||0,status:'scheduled',paid:false,note:''};
+  }
+  $('#fStudent').value=s.studentId; $('#fSource').value=s.sourceId; $('#fDate').value=s.date; $('#fTime').value=s.time||'';
+  $('#fHours').value=s.hours; $('#fRate').value=s.rate; $('#fStatus').value=s.status; $('#fPaid').value=s.paid?'yes':'no'; $('#fNote').value=s.note||'';
+  $('#sessionDialog').showModal();
+}
+$('#saveSessionBtn').onclick=()=>{
+  const obj={
+    id:editingSessionId||uid(), studentId:$('#fStudent').value, sourceId:$('#fSource').value,
+    date:$('#fDate').value,time:$('#fTime').value,hours:Number($('#fHours').value||0),rate:Number($('#fRate').value||0),
+    status:$('#fStatus').value,paid:$('#fPaid').value==='yes',note:$('#fNote').value||'', recurring:false
+  };
+  if(!obj.date||!obj.studentId){alert('请填写学生和日期');return}
+  const i=state.sessions.findIndex(x=>x.id===obj.id); if(i>=0)state.sessions[i]={...state.sessions[i],...obj};else state.sessions.push(obj);
+  $('#sessionDialog').close();save();
+};
+$('#deleteSessionBtn').onclick=()=>{
+  if(!editingSessionId)return;
+  if(confirm('确定删除这节课？')){state.sessions=state.sessions.filter(x=>x.id!==editingSessionId);$('#sessionDialog').close();save()}
+};
+
+function initWeekdays(){
+  const wrap=$('#weekdayRow');
+  wrap.innerHTML=[
+    ['1','周一'],['2','周二'],['3','周三'],['4','周四'],['5','周五'],['6','周六'],['0','周日']
+  ].map(([v,t])=>`<label><input type="checkbox" value="${v}"> ${t}</label>`).join('');
+}
+function openRecurring(){
+  if(!state.students.length){alert('请先添加学生。');return}
+  const st=state.students[0];
+  $('#rStudent').value=st.id; $('#rSource').value=st.sourceId||state.sources[0].id; $('#rRate').value=st.rate||0;
+  const start=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1), end=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,0);
+  $('#rStart').value=ymd(start); $('#rEnd').value=ymd(end); $('#rTime').value=''; $('#rHours').value=1; $('#rStatus').value='scheduled'; $('#rNote').value='每周固定课';
+  $$('#weekdayRow input').forEach(x=>x.checked=false);
+  $('#recurringDialog').showModal();
+}
+$('#generateRecurringBtn').onclick=()=>{
+  const days=$$('#weekdayRow input:checked').map(x=>Number(x.value));
+  if(!days.length){alert('至少选择一个星期几');return}
+  const start=parseDate($('#rStart').value), end=parseDate($('#rEnd').value);
+  if(!start||!end||end<start){alert('日期范围不正确');return}
+  const template={
+    studentId:$('#rStudent').value,sourceId:$('#rSource').value,time:$('#rTime').value,hours:Number($('#rHours').value||0),
+    rate:Number($('#rRate').value||0),status:$('#rStatus').value,paid:false,note:$('#rNote').value||'',recurring:true
+  };
+  let added=0;
+  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+    if(days.includes(d.getDay())){
+      const date=ymd(d);
+      const exists=state.sessions.some(s=>s.date===date&&s.studentId===template.studentId&&s.time===template.time&&Number(s.hours)===Number(template.hours));
+      if(!exists){state.sessions.push({id:uid(),date,...template});added++}
+    }
+  }
+  $('#recurringDialog').close();save();alert(`已生成 ${added} 节课`);
+};
+
+function openStudent(id){
+  editingStudentId=id||null; const st=id?state.students.find(x=>x.id===id):{name:'',sourceId:state.sources[0].id,rate:0,note:''};
+  $('#studentDialogTitle').textContent=id?'编辑学生':'添加学生'; $('#stName').value=st.name; $('#stSource').value=st.sourceId; $('#stRate').value=st.rate; $('#stNote').value=st.note||'';
+  $('#studentDialog').showModal();
+}
+$('#saveStudentBtn').onclick=()=>{
+  const name=$('#stName').value.trim(); if(!name){alert('请输入学生名称');return}
+  const obj={id:editingStudentId||uid(),name,sourceId:$('#stSource').value,rate:Number($('#stRate').value||0),note:$('#stNote').value||''};
+  const i=state.students.findIndex(x=>x.id===obj.id); if(i>=0)state.students[i]=obj;else state.students.push(obj);
+  $('#studentDialog').close();save();
+};
+function deleteStudent(id){
+  if(state.sessions.some(s=>s.studentId===id)){alert('这个学生已有课表记录，建议保留学生档案；如要删除，请先删除相关课程。');return}
+  if(confirm('确定删除学生？')){state.students=state.students.filter(x=>x.id!==id);save()}
+}
+
+function openSource(id){
+  editingSourceId=id||null; const s=id?state.sources.find(x=>x.id===id):{name:'',taxRate:0};
+  $('#srcName').value=s.name; $('#srcTax').value=s.taxRate; $('#sourceDialog').showModal();
+}
+$('#saveSourceBtn').onclick=()=>{
+  const name=$('#srcName').value.trim();if(!name){alert('请输入名称');return}
+  const obj={id:editingSourceId||uid(),name,taxRate:Number($('#srcTax').value||0)};
+  const i=state.sources.findIndex(x=>x.id===obj.id);if(i>=0)state.sources[i]=obj;else state.sources.push(obj);
+  $('#sourceDialog').close();save();
+};
+function deleteSource(id){
+  if(state.sessions.some(s=>s.sourceId===id)||state.students.some(s=>s.sourceId===id)){alert('该来源仍被学生或课程使用，暂不能删除。');return}
+  if(confirm('确定删除收入来源？')){state.sources=state.sources.filter(x=>x.id!==id);save()}
+}
+
+function copyMonthToNext(){
+  const from=monthSessions(viewMonth).filter(s=>s.recurring&&['scheduled','completed','makeup'].includes(s.status));
+  if(!from.length){alert('本月没有标记为周期课的课程可复制。');return}
+  const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
+  let added=0;
+  from.forEach(s=>{
+    const d=parseDate(s.date), targetWeekday=d.getDay();
+    // 用“同一周序 + 同星期”映射到下月
+    const nth=Math.floor((d.getDate()-1)/7);
+    const first=new Date(next.getFullYear(),next.getMonth(),1);
+    let delta=(targetWeekday-first.getDay()+7)%7;
+    const td=1+delta+nth*7;
+    const target=new Date(next.getFullYear(),next.getMonth(),td);
+    if(target.getMonth()!==next.getMonth())return;
+    const date=ymd(target);
+    const exists=state.sessions.some(x=>x.date===date&&x.studentId===s.studentId&&x.time===s.time);
+    if(!exists){state.sessions.push({...s,id:uid(),date,status:'scheduled',paid:false});added++}
+  });
+  save();alert(`已复制 ${added} 节到 ${monthLabel(next)}。你可以再按实际请假/停课调整。`);
+}
+
+function exportJson(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`自由教师工作台_${ymd(new Date())}.json`;a.click();URL.revokeObjectURL(a.href);
+}
+$('#importInput').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const data=JSON.parse(await f.text());
+    if(!data.sources||!data.students||!data.sessions)throw new Error('格式不正确');
+    if(confirm('导入会覆盖当前数据，确定继续？')){state=data;save()}
+  }catch(err){alert('导入失败：'+err.message)}
+  e.target.value='';
+};
+
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+// events
+renderTabs();initWeekdays();
+$('#quickAdd').onclick=()=>openSession(); $('#openRecurring').onclick=openRecurring; $('#addStudentBtn').onclick=()=>openStudent(); $('#addSourceBtn').onclick=()=>openSource();
+$('#prevMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar()}
+$('#nextMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar()}
+$('#todayBtn').onclick=()=>{const n=new Date();viewMonth=new Date(n.getFullYear(),n.getMonth(),1);renderCalendar()}
+$('#copyMonthBtn').onclick=copyMonthToNext;
+$('#prevIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()-1,1);renderIncome()}
+$('#nextIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()+1,1);renderIncome()}
+$('#exportBtn').onclick=exportJson;
+$('#resetBtn').onclick=()=>{if(confirm('确定清空全部课表、学生和自定义来源？此操作无法撤销。')){localStorage.removeItem(LS_KEY);state=seed();save()}}
+$('#fStudent').onchange=()=>{const st=getStudent($('#fStudent').value);$('#fSource').value=st.sourceId;$('#fRate').value=st.rate}
+$('#rStudent').onchange=()=>{const st=getStudent($('#rStudent').value);$('#rSource').value=st.sourceId;$('#rRate').value=st.rate}
+
+renderAll();
+</script>
+</body>
+</html>

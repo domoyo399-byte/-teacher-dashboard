@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V1.6</title>
+<title>自由教师工作台 V1.8</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -51,7 +51,14 @@
   .today-banner strong{font-size:17px}
   .today-banner .sub{font-size:12px;color:var(--muted);margin-top:3px}
   .month-compact-count{display:none}
-  .compact-course{font-family:"Times New Roman",Times,serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35;color:var(--accent);font-weight:700}
+  .compact-course{font-family:"Times New Roman",Times,serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35;color:var(--accent);font-weight:700;cursor:pointer}
+  .day-detail-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
+  .day-detail-item{width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 12px;cursor:pointer}
+  .day-detail-item:hover{background:#f7f9f7}
+  .day-detail-item .top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .day-detail-item .who{font-weight:800;font-size:15px}
+  .day-detail-item .meta{font-size:12px;color:var(--muted);margin-top:4px}
+  .day-detail-actions{display:flex;justify-content:flex-end;margin-top:10px}
   .ru-name{font-family:"Times New Roman",Times,serif}
   .ru-course{font-family:"Times New Roman",Times,serif}
   .compact-cancelled{text-decoration:line-through;color:#9aa49d}
@@ -124,7 +131,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.6</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.8</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -151,6 +158,9 @@
         <button class="btn active" data-view="today">今天</button>
         <button class="btn" data-view="week">本周</button>
         <button class="btn" data-view="month">月课表</button>
+      </div>
+      <div id="monthCopyActions" style="display:none;width:100%;justify-content:flex-end">
+        <button class="btn" id="copyMonthBtn">复制固定课到下月</button>
       </div>
     </div>
 
@@ -302,6 +312,20 @@
 </dialog>
 
 
+
+<dialog id="dayDetailDialog">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="dayDetailTitle">当天课程</h3>
+      <button class="btn" id="closeDayDetailBtn">关闭</button>
+    </div>
+    <div class="day-detail-list" id="dayDetailList"></div>
+    <div class="day-detail-actions">
+      <button class="btn primary" id="addFromDayDetailBtn">＋ 新增当天课程</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="studentMonthDialog">
   <div class="modal">
     <div class="modal-head"><h3 id="studentMonthTitle">学生月统计</h3><button class="btn" id="closeStudentMonthBtn">关闭</button></div>
@@ -350,6 +374,7 @@ viewMonth = new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1);
 let incomeMonth = new Date(viewMonth);
 let editingSessionId=null, editingStudentId=null, editingSourceId=null;
 let studentMonthStudentId=null;
+let dayDetailDate=null;
 let studentMonthDate=new Date();
 studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth(),1);
 
@@ -413,10 +438,14 @@ function startOfWeek(d){
 function renderAgenda(){
   const host=$('#agendaView'), wrap=$('#calendarWrap'), nav=$('#monthNav');
   $$('.view-switch .btn').forEach(b=>b.classList.toggle('active',b.dataset.view===scheduleView));
+  const copyActions=$('#monthCopyActions');
   if(scheduleView==='month'){
-    host.innerHTML=''; wrap.style.display='block'; nav.style.display='flex'; return;
+    host.innerHTML=''; wrap.style.display='block'; nav.style.display='flex';
+    if(copyActions) copyActions.style.display='flex';
+    return;
   }
   wrap.style.display='none'; nav.style.display='none';
+  if(copyActions) copyActions.style.display='none';
   const now=new Date(), today=ymd(now);
   let days=[];
   if(scheduleView==='today'){
@@ -480,7 +509,7 @@ function renderCalendar(){
         const isRu=/[А-Яа-яЁё]/.test(st.name);
         const safeName=escapeHtml(st.name);
         const label=`${s.time||'待定'} ${safeName}`;
-        return `<div class="compact-course ${['leave','cancelled'].includes(es)?'compact-cancelled':''}" title="${label}">${s.time||'待定'} <span class="${isRu?'ru-name':''}">${safeName}</span></div>`;
+        return `<div class="compact-course ${['leave','cancelled'].includes(es)?'compact-cancelled':''}" data-edit-session="${s.id}" title="${label}">${s.time||'待定'} <span class="${isRu?'ru-name':''}">${safeName}</span></div>`;
       }).join('') + (daySessions.length>3?`<div class="compact-more">+${daySessions.length-3}节</div>`:'') : ''}</div>
     </div>`;
   }
@@ -641,6 +670,44 @@ function deleteStudent(id){
 }
 
 
+
+function openDayDetail(dateStr){
+  dayDetailDate=dateStr;
+  const d=parseDate(dateStr);
+  $('#dayDetailTitle').textContent=`${d.getMonth()+1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+  const arr=state.sessions.filter(s=>s.date===dateStr)
+    .sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+  const host=$('#dayDetailList');
+  if(!arr.length){
+    host.innerHTML='<div class="empty">这一天还没有课程。</div>';
+  }else{
+    host.innerHTML=arr.map(s=>{
+      const st=getStudent(s.studentId), es=effectiveStatus(s);
+      const ru=/[А-Яа-яЁё]/.test(st.name);
+      return `<button class="day-detail-item ${ru?'ru-course':''}" data-day-edit="${s.id}">
+        <div class="top"><div class="who">${s.time||'未定'} · <span class="${ru?'ru-name':''}">${escapeHtml(st.name)}</span></div>
+        <div class="status-pill ${statusClass[es]||''}">${statusText[es]||es}</div></div>
+        <div class="meta">${s.hours}h${s.note?' · '+escapeHtml(s.note):''}</div>
+      </button>`;
+    }).join('');
+    $$('[data-day-edit]').forEach(b=>b.onclick=()=>{
+      $('#dayDetailDialog').close();
+      openSession(b.dataset.dayEdit);
+    });
+  }
+  $('#dayDetailDialog').showModal();
+}
+function bindMonthDayInteractions(){
+  $$('[data-edit-session]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    openSession(el.dataset.editSession);
+  });
+  $$('[data-day-detail]').forEach(el=>el.onclick=(e)=>{
+    if(e.target.closest('[data-edit-session]')) return;
+    openDayDetail(el.dataset.dayDetail);
+  });
+}
+
 function openStudentMonth(id){
   studentMonthStudentId=id;
   const n=new Date();
@@ -733,6 +800,7 @@ renderTabs();initWeekdays();
 $('#quickAdd').onclick=()=>openSession(); $('#openRecurring').onclick=openRecurring; $('#addStudentBtn').onclick=()=>openStudent(); $('#addSourceBtn').onclick=()=>openSource();
 $('#prevMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar()}
 $('#nextMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar()}
+$('#copyMonthBtn').onclick=copyMonthToNext;
 $('#prevIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()-1,1);renderIncome()}
 $('#nextIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()+1,1);renderIncome()}
 
@@ -754,6 +822,26 @@ $('#bulkPaidBtn').onclick=()=>{
   }
 };
 
+
+
+$('#closeDayDetailBtn').onclick=()=>$('#dayDetailDialog').close();
+$('#addFromDayDetailBtn').onclick=()=>{
+  const date=dayDetailDate;
+  $('#dayDetailDialog').close();
+  openSession(null,date);
+};
+document.addEventListener('click',e=>{
+  const course=e.target.closest('[data-edit-session]');
+  if(course){
+    e.stopPropagation();
+    openSession(course.dataset.editSession);
+    return;
+  }
+  const day=e.target.closest('[data-day-detail]');
+  if(day && !e.target.closest('button,input,select,textarea')){
+    openDayDetail(day.dataset.dayDetail);
+  }
+});
 
 $('#closeStudentMonthBtn').onclick=()=>$('#studentMonthDialog').close();
 $('#prevStudentMonth').onclick=()=>{studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth()-1,1);renderStudentMonth()};

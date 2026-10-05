@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V1.9</title>
+<title>自由教师工作台 V2.1</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -125,13 +125,28 @@
     .view-switch{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
     .view-switch .btn{width:100%}
   }
+
+  /* V2.1: schedule income overview collapse */
+  .overview-toggle{
+    width:100%;display:flex;align-items:center;justify-content:space-between;
+    gap:12px;border:1px solid var(--line);background:#f7faf7;border-radius:14px;
+    padding:11px 14px;margin:12px 0 8px;cursor:pointer;color:var(--text);
+    font:inherit;
+  }
+  .overview-toggle .left{display:flex;align-items:baseline;gap:10px;min-width:0}
+  .overview-toggle .title{font-weight:800}
+  .overview-toggle .amount{font-weight:700;color:var(--accent);white-space:nowrap}
+  .overview-toggle .chev{transition:transform .18s ease;color:var(--muted)}
+  .overview-toggle.open .chev{transform:rotate(180deg)}
+  #scheduleMetrics{display:none !important;}
+  #scheduleMetrics.open{display:grid !important;}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.9</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.1</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -203,10 +218,10 @@
 
     <div class="card" style="margin-bottom:12px">
       <h3 class="section-title">批量收款</h3>
-      <p class="hint">正常课程会在结束后自动视为“已完成”。收款不强行自动，因为机构工资和私教结算不是一回事，人类偏偏喜欢把钱分很多种时间到账。</p>
+      <p class="hint">“课后即收”的学生在课程完成后会自动计入已收款；“月结”的学生则等实际结算时，在这里一次性确认。</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select id="bulkPaySource" class="btn" style="min-width:150px"></select>
-        <button class="btn primary" id="bulkPaidBtn">将本月已完成标记为已收款</button>
+        <select id="bulkPayStudent" class="btn" style="min-width:150px"></select>
+        <button class="btn primary" id="bulkPaidBtn">确认本月月结已收款</button>
       </div>
       <div class="hint" id="bulkPayHint" style="margin-top:8px"></div>
     </div>
@@ -271,8 +286,8 @@
           <option value="makeup">补课</option>
         </select>
       </div>
-      <div class="field"><label>是否已收款</label>
-        <select id="fPaid"><option value="no">未收</option><option value="yes">已收</option></select>
+      <div class="field"><label>收款状态（手动覆盖）</label>
+        <select id="fPaid"><option value="no">未手动标记</option><option value="yes">已收</option></select>
       </div>
       <div class="field span2"><label>备注</label><textarea id="fNote" rows="2" placeholder="例如：国庆后复课 / 临时调课 / 补上次请假"></textarea></div>
     </div>
@@ -309,7 +324,13 @@
       <div class="field"><label>学生名称/昵称</label><input id="stName"></div>
       <div class="field"><label>默认收入来源</label><select id="stSource"></select></div>
       <div class="field"><label>默认单价（元/小时）</label><input id="stRate" type="number" min="0" step="1"></div>
-      <div class="field"><label>备注</label><input id="stNote"></div>
+      <div class="field"><label>收款方式</label>
+        <select id="stPaymentMode">
+          <option value="monthly">月结</option>
+          <option value="immediate">课后即收</option>
+        </select>
+      </div>
+      <div class="field span2"><label>备注</label><input id="stNote"></div>
     </div>
     <div class="modal-actions"><button type="button" class="btn primary" id="saveStudentBtn">保存</button></div>
   </form>
@@ -420,6 +441,11 @@ function effectiveStatus(s){
   if(['scheduled','makeup'].includes(s.status) && sessionEnd(s) < new Date()) return 'completed';
   return s.status;
 }
+function effectivePaid(s){
+  if(s.paid) return true;
+  const st=getStudent(s.studentId);
+  return st && st.paymentMode==='immediate' && effectiveStatus(s)==='completed';
+}
 function countsProjected(s){return ['scheduled','completed','makeup'].includes(effectiveStatus(s))}
 function countsEarned(s){return effectiveStatus(s)==='completed'}
 function countsLost(s){return ['leave','cancelled'].includes(s.status)}
@@ -471,7 +497,7 @@ function renderAgenda(){
       arr.forEach(s=>{
         const st=getStudent(s.studentId), src=getSource(s.sourceId), es=effectiveStatus(s);
         out+=`<div class="agenda-session ${/[А-Яа-яЁё]/.test(st.name)?'ru-course':''}" data-session="${s.id}">
-          <div class="left"><div class="name ${/[А-Яа-яЁё]/.test(st.name)?'ru-name':''}">${escapeHtml(st.name)}</div><div class="meta">${escapeHtml(src.name)} · ${statusText[es]||es}${s.paid?' · 已收款':''}</div></div>
+          <div class="left"><div class="name ${/[А-Яа-яЁё]/.test(st.name)?'ru-name':''}">${escapeHtml(st.name)}</div><div class="meta">${escapeHtml(src.name)} · ${statusText[es]||es}${effectivePaid(s)?' · 已收款':''}</div></div>
           <div class="right"><strong>${s.time||'未定时间'}</strong><div class="meta">${s.hours}h · ${money(net(s))}</div></div>
         </div>`;
       });
@@ -504,7 +530,7 @@ function renderCalendar(){
         return `<div class="session ${statusClass[s.status]||''}" data-session="${s.id}">
           <div class="student ${/[А-Яа-яЁё]/.test(st.name)?'ru-name':''}">${escapeHtml(st.name)}</div>
           <div>${s.time?escapeHtml(s.time)+' · ':''}${s.hours}h · ${money(net(s))}</div>
-          <div class="meta">${escapeHtml(src.name)} · ${statusText[effectiveStatus(s)]||effectiveStatus(s)}${s.paid?' · 已收款':''}</div>
+          <div class="meta">${escapeHtml(src.name)} · ${statusText[effectiveStatus(s)]||effectiveStatus(s)}${effectivePaid(s)?' · 已收款':''}</div>
         </div>`;
       }).join('')}
       <div class="month-compact-count">${daySessions.length ? daySessions.slice(0,3).map(s=>{
@@ -536,8 +562,8 @@ function renderIncome(){
   const floor=sessions.filter(countsEarned).reduce((a,s)=>a+net(s),0);
   const projected=sessions.filter(countsProjected).reduce((a,s)=>a+net(s),0);
   const full=sessions.reduce((a,s)=>a+net(s),0);
-  const received=sessions.filter(s=>s.paid).reduce((a,s)=>a+net(s),0);
-  const pending=sessions.filter(s=>countsEarned(s)&&!s.paid).reduce((a,s)=>a+net(s),0);
+  const received=sessions.filter(effectivePaid).reduce((a,s)=>a+net(s),0);
+  const pending=sessions.filter(s=>countsEarned(s)&&!effectivePaid(s)).reduce((a,s)=>a+net(s),0);
   $('#iFloor').textContent=money(floor); $('#iProjected').textContent=money(projected);
   $('#iFull').textContent=money(full); $('#iReceived').textContent=money(received); $('#iPending').textContent=money(pending);
 
@@ -549,13 +575,14 @@ function renderIncome(){
     return `<tr><td>${escapeHtml(src.name)}</td><td>${money(grossProjected)}</td><td>${src.taxRate}%</td><td>${money(netProjected)}</td><td>${money(netEarned)}</td></tr>`;
   }).join('');
   $('#sourceTable').innerHTML=rows||`<tr><td colspan="5" class="empty">暂无数据</td></tr>`;
-  const sel=$('#bulkPaySource');
+  const sel=$('#bulkPayStudent');
   if(sel){
     const old=sel.value;
-    sel.innerHTML='<option value="all">全部来源</option>'+state.sources.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    const monthlyStudents=state.students.filter(st=>(st.paymentMode||'monthly')==='monthly');
+    sel.innerHTML='<option value="all">全部月结学生</option>'+monthlyStudents.map(st=>`<option value="${st.id}">${escapeHtml(st.name)}</option>`).join('');
     if([...sel.options].some(o=>o.value===old)) sel.value=old;
-    const unpaid=sessions.filter(s=>countsEarned(s)&&!s.paid&&(sel.value==='all'||s.sourceId===sel.value));
-    $('#bulkPayHint').textContent=`当前筛选有 ${unpaid.length} 节已完成但未标记收款的课程。`;
+    const unpaid=sessions.filter(s=>countsEarned(s)&&!effectivePaid(s)&&(sel.value==='all'||s.studentId===sel.value));
+    $('#bulkPayHint').textContent=`当前筛选有 ${unpaid.length} 节已完成但尚未确认收款的月结课程。`;
   }
 }
 
@@ -566,7 +593,7 @@ function renderStudents(){
     const src=getSource(st.sourceId);
     return `<div class="row">
       <div class="row-main"><div class="row-title">${escapeHtml(st.name)}</div>
-      <div class="row-sub">${escapeHtml(src.name)} · 默认 ${money(st.rate)}/小时${st.note?' · '+escapeHtml(st.note):''}</div></div>
+      <div class="row-sub">${escapeHtml(src.name)} · 默认 ${money(st.rate)}/小时 · ${((st.paymentMode||'monthly')==='immediate')?'课后即收':'月结'}${st.note?' · '+escapeHtml(st.note):''}</div></div>
       <div class="row-actions"><button class="btn soft" data-month-st="${st.id}">月统计</button><button class="btn" data-edit-st="${st.id}">编辑</button><button class="btn danger" data-del-st="${st.id}">删除</button></div>
     </div>`;
   }).join('');
@@ -658,13 +685,13 @@ $('#generateRecurringBtn').onclick=()=>{
 };
 
 function openStudent(id){
-  editingStudentId=id||null; const st=id?state.students.find(x=>x.id===id):{name:'',sourceId:state.sources[0].id,rate:0,note:''};
-  $('#studentDialogTitle').textContent=id?'编辑学生':'添加学生'; $('#stName').value=st.name; $('#stSource').value=st.sourceId; $('#stRate').value=st.rate; $('#stNote').value=st.note||'';
+  editingStudentId=id||null; const st=id?state.students.find(x=>x.id===id):{name:'',sourceId:state.sources[0].id,rate:0,paymentMode:'monthly',note:''};
+  $('#studentDialogTitle').textContent=id?'编辑学生':'添加学生'; $('#stName').value=st.name; $('#stSource').value=st.sourceId; $('#stRate').value=st.rate; $('#stPaymentMode').value=st.paymentMode||'monthly'; $('#stNote').value=st.note||'';
   $('#studentDialog').showModal();
 }
 $('#saveStudentBtn').onclick=()=>{
   const name=$('#stName').value.trim(); if(!name){alert('请输入学生名称');return}
-  const obj={id:editingStudentId||uid(),name,sourceId:$('#stSource').value,rate:Number($('#stRate').value||0),note:$('#stNote').value||''};
+  const obj={id:editingStudentId||uid(),name,sourceId:$('#stSource').value,rate:Number($('#stRate').value||0),paymentMode:$('#stPaymentMode').value||'monthly',note:$('#stNote').value||''};
   const i=state.students.findIndex(x=>x.id===obj.id); if(i>=0)state.students[i]=obj;else state.students.push(obj);
   $('#studentDialog').close();save();
 };
@@ -742,7 +769,7 @@ function renderStudentMonth(){
     return `<div class="student-date-item">
       <div><div class="d">${d.getMonth()+1}月${d.getDate()}日 ${weekdays[d.getDay()]}</div>
       <div class="m">${s.time||'未定时间'} · ${s.hours}h</div></div>
-      <div class="status-pill ${statusClass[es]||''}">${statusText[es]||es}${s.paid?' · 已收款':''}</div>
+      <div class="status-pill ${statusClass[es]||''}">${statusText[es]||es}${effectivePaid(s)?' · 已收款':''}</div>
     </div>`;
   }).join('');
 }
@@ -815,13 +842,13 @@ $$('.view-switch .btn').forEach(b=>b.onclick=()=>{
   }
   renderCalendar();
 });
-$('#bulkPaySource').onchange=renderIncome;
+$('#bulkPayStudent').onchange=renderIncome;
 $('#bulkPaidBtn').onclick=()=>{
-  const src=$('#bulkPaySource').value;
-  const sessions=monthSessions(incomeMonth).filter(s=>countsEarned(s)&&!s.paid&&(src==='all'||s.sourceId===src));
-  if(!sessions.length){alert('当前筛选没有待标记收款的已完成课程。');return}
-  const label=src==='all'?'全部来源':getSource(src).name;
-  if(confirm(`确定把 ${monthLabel(incomeMonth)}「${label}」的 ${sessions.length} 节已完成课程批量标记为已收款？`)){
+  const studentId=$('#bulkPayStudent').value;
+  const sessions=monthSessions(incomeMonth).filter(s=>countsEarned(s)&&!effectivePaid(s)&&(studentId==='all'||s.studentId===studentId));
+  if(!sessions.length){alert('当前筛选没有待确认收款的月结课程。');return}
+  const label=studentId==='all'?'全部月结学生':getStudent(studentId).name;
+  if(confirm(`确定把 ${monthLabel(incomeMonth)}「${label}」的 ${sessions.length} 节已完成课程确认成已收款？`)){
     sessions.forEach(s=>s.paid=true); save();
   }
 };

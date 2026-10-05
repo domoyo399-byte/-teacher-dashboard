@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V1.4</title>
+<title>自由教师工作台 V1.5</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -75,6 +75,15 @@
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
   .row-main{min-width:0}.row-title{font-weight:800}.row-sub{font-size:12px;color:var(--muted);margin-top:3px;white-space:normal}
   .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .student-month-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 14px}
+  .student-month-summary .mini{background:#f7f9f7;border:1px solid var(--line);border-radius:12px;padding:10px}
+  .student-month-summary .mini .k{font-size:11px;color:var(--muted)}
+  .student-month-summary .mini .v{font-size:20px;font-weight:800;margin-top:3px}
+  .student-date-list{display:flex;flex-direction:column;gap:7px}
+  .student-date-item{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+  .student-date-item .d{font-weight:800}
+  .student-date-item .m{font-size:12px;color:var(--muted);margin-top:2px}
+  @media(max-width:520px){.student-month-summary{grid-template-columns:repeat(3,1fr)}.student-month-summary .mini{padding:8px}.student-month-summary .mini .v{font-size:18px}}
   table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden}
   th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);font-size:13px}
   th{color:var(--muted);font-weight:700;background:#fafbfa}
@@ -114,7 +123,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.4</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.5</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -291,6 +300,24 @@
   </form>
 </dialog>
 
+
+<dialog id="studentMonthDialog">
+  <div class="modal">
+    <div class="modal-head"><h3 id="studentMonthTitle">学生月统计</h3><button class="btn" id="closeStudentMonthBtn">关闭</button></div>
+    <div class="month-nav" style="justify-content:center;margin-bottom:10px">
+      <button class="btn" id="prevStudentMonth">‹</button>
+      <div class="month-title" id="studentMonthLabel"></div>
+      <button class="btn" id="nextStudentMonth">›</button>
+    </div>
+    <div class="student-month-summary">
+      <div class="mini"><div class="k">本月安排</div><div class="v" id="smPlanned">0</div></div>
+      <div class="mini"><div class="k">已完成</div><div class="v" id="smCompleted">0</div></div>
+      <div class="mini"><div class="k">请假/取消</div><div class="v" id="smCancelled">0</div></div>
+    </div>
+    <div class="student-date-list" id="studentMonthList"></div>
+  </div>
+</dialog>
+
 <dialog id="sourceDialog">
   <form method="dialog" class="modal">
     <div class="modal-head"><h3>收入来源</h3><button class="btn" value="cancel">关闭</button></div>
@@ -321,6 +348,9 @@ let viewMonth = new Date();
 viewMonth = new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1);
 let incomeMonth = new Date(viewMonth);
 let editingSessionId=null, editingStudentId=null, editingSourceId=null;
+let studentMonthStudentId=null;
+let studentMonthDate=new Date();
+studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth(),1);
 
 function seed(){
   return {
@@ -503,9 +533,10 @@ function renderStudents(){
     return `<div class="row">
       <div class="row-main"><div class="row-title">${escapeHtml(st.name)}</div>
       <div class="row-sub">${escapeHtml(src.name)} · 默认 ${money(st.rate)}/小时${st.note?' · '+escapeHtml(st.note):''}</div></div>
-      <div class="row-actions"><button class="btn" data-edit-st="${st.id}">编辑</button><button class="btn danger" data-del-st="${st.id}">删除</button></div>
+      <div class="row-actions"><button class="btn soft" data-month-st="${st.id}">月统计</button><button class="btn" data-edit-st="${st.id}">编辑</button><button class="btn danger" data-del-st="${st.id}">删除</button></div>
     </div>`;
   }).join('');
+  $$('[data-month-st]').forEach(b=>b.onclick=()=>openStudentMonth(b.dataset.monthSt));
   $$('[data-edit-st]').forEach(b=>b.onclick=()=>openStudent(b.dataset.editSt));
   $$('[data-del-st]').forEach(b=>b.onclick=()=>deleteStudent(b.dataset.delSt));
 }
@@ -608,6 +639,42 @@ function deleteStudent(id){
   if(confirm('确定删除学生？')){state.students=state.students.filter(x=>x.id!==id);save()}
 }
 
+
+function openStudentMonth(id){
+  studentMonthStudentId=id;
+  const n=new Date();
+  studentMonthDate=new Date(n.getFullYear(),n.getMonth(),1);
+  renderStudentMonth();
+  $('#studentMonthDialog').showModal();
+}
+function renderStudentMonth(){
+  const st=getStudent(studentMonthStudentId);
+  $('#studentMonthTitle').innerHTML=`${/[А-Яа-яЁё]/.test(st.name)?`<span class="ru-name">${escapeHtml(st.name)}</span>`:escapeHtml(st.name)} · 月统计`;
+  $('#studentMonthLabel').textContent=monthLabel(studentMonthDate);
+  const k=monthKey(studentMonthDate);
+  const arr=state.sessions.filter(s=>s.studentId===studentMonthStudentId && s.date.startsWith(k))
+    .sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'99:99').localeCompare(b.time||'99:99'));
+  const planned=arr.length;
+  const completed=arr.filter(s=>countsEarned(s)).length;
+  const cancelled=arr.filter(s=>countsLost(s)).length;
+  $('#smPlanned').textContent=planned;
+  $('#smCompleted').textContent=completed;
+  $('#smCancelled').textContent=cancelled;
+  const host=$('#studentMonthList');
+  if(!arr.length){
+    host.innerHTML='<div class="empty">这个月没有课程记录。</div>';
+    return;
+  }
+  host.innerHTML=arr.map(s=>{
+    const d=parseDate(s.date), es=effectiveStatus(s);
+    return `<div class="student-date-item">
+      <div><div class="d">${d.getMonth()+1}月${d.getDate()}日 ${weekdays[d.getDay()]}</div>
+      <div class="m">${s.time||'未定时间'} · ${s.hours}h</div></div>
+      <div class="status-pill ${statusClass[es]||''}">${statusText[es]||es}${s.paid?' · 已收款':''}</div>
+    </div>`;
+  }).join('');
+}
+
 function openSource(id){
   editingSourceId=id||null; const s=id?state.sources.find(x=>x.id===id):{name:'',taxRate:0};
   $('#srcName').value=s.name; $('#srcTax').value=s.taxRate; $('#sourceDialog').showModal();
@@ -685,6 +752,11 @@ $('#bulkPaidBtn').onclick=()=>{
     sessions.forEach(s=>s.paid=true); save();
   }
 };
+
+
+$('#closeStudentMonthBtn').onclick=()=>$('#studentMonthDialog').close();
+$('#prevStudentMonth').onclick=()=>{studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth()-1,1);renderStudentMonth()};
+$('#nextStudentMonth').onclick=()=>{studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth()+1,1);renderStudentMonth()};
 
 $('#exportBtn').onclick=exportJson;
 $('#resetBtn').onclick=()=>{if(confirm('确定清空全部课表、学生和自定义来源？此操作无法撤销。')){localStorage.removeItem(LS_KEY);state=seed();save()}}

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V1.8</title>
+<title>自由教师工作台 V1.9</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -131,7 +131,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.8</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.9</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -164,7 +164,11 @@
       </div>
     </div>
 
-    <div class="cards">
+    <button class="overview-toggle" id="overviewToggle" type="button" aria-expanded="false">
+      <span class="left"><span class="title">收入概览</span><span class="amount" id="overviewProjected">预计到账 ¥0</span></span>
+      <span class="chev">⌄</span>
+    </button>
+    <div class="cards schedule-metrics" id="scheduleMetrics">
       <div class="card metric"><div class="label">预计到账</div><div class="value" id="mProjected">¥0</div><div class="sub">已完成 + 已排课 + 补课</div></div>
       <div class="card metric"><div class="label">已完成收入</div><div class="value" id="mEarned">¥0</div><div class="sub">只算“已完成”</div></div>
       <div class="card metric"><div class="label">取消/请假损失</div><div class="value" id="mLost">¥0</div><div class="sub">按当前课价估算</div></div>
@@ -521,7 +525,7 @@ function renderCalendar(){
   const earned=sessions.filter(countsEarned).reduce((a,s)=>a+net(s),0);
   const lost=sessions.filter(countsLost).reduce((a,s)=>a+net(s),0);
   const hours=sessions.filter(countsEarned).reduce((a,s)=>a+Number(s.hours||0),0);
-  $('#mProjected').textContent=money(projected); $('#mEarned').textContent=money(earned);
+  $('#mProjected').textContent=money(projected); $('#overviewProjected').textContent='预计到账 '+(money(projected)); $('#mEarned').textContent=money(earned);
   $('#mLost').textContent=money(lost); $('#mHours').textContent=hours.toFixed(1)+'h';
   renderAgenda();
 }
@@ -846,6 +850,15 @@ document.addEventListener('click',e=>{
 $('#closeStudentMonthBtn').onclick=()=>$('#studentMonthDialog').close();
 $('#prevStudentMonth').onclick=()=>{studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth()-1,1);renderStudentMonth()};
 $('#nextStudentMonth').onclick=()=>{studentMonthDate=new Date(studentMonthDate.getFullYear(),studentMonthDate.getMonth()+1,1);renderStudentMonth()};
+
+
+$('#overviewToggle').onclick=()=>{
+  const box=$('#scheduleMetrics'), btn=$('#overviewToggle');
+  const open=!box.classList.contains('open');
+  box.classList.toggle('open',open);
+  btn.classList.toggle('open',open);
+  btn.setAttribute('aria-expanded',String(open));
+};
 
 $('#exportBtn').onclick=exportJson;
 $('#resetBtn').onclick=()=>{if(confirm('确定清空全部课表、学生和自定义来源？此操作无法撤销。')){localStorage.removeItem(LS_KEY);state=seed();save()}}

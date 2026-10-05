@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台</title>
+<title>自由教师工作台 V1.1</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -35,6 +35,24 @@
   .calendar-wrap{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
   .calendar{min-width:850px}
   .week-head,.week{display:grid;grid-template-columns:repeat(7,1fr)}
+  .view-switch{display:flex;gap:6px;background:#eef2ef;padding:4px;border-radius:12px}
+  .view-switch .btn{border:none;background:transparent;padding:7px 11px}
+  .view-switch .btn.active{background:#fff;color:var(--accent);font-weight:800;box-shadow:0 2px 8px rgba(44,63,51,.08)}
+  .agenda{display:flex;flex-direction:column;gap:10px}
+  .agenda-day{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+  .agenda-day.today-agenda{border:2px solid var(--accent);background:#f5faf6}
+  .agenda-date{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:800}
+  .agenda-date small{font-weight:500;color:var(--muted)}
+  .agenda-session{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+  .agenda-session:first-of-type{border-top:none}
+  .agenda-session .left{min-width:0}.agenda-session .name{font-weight:800}.agenda-session .meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .agenda-session .right{text-align:right;white-space:nowrap}
+  .today-banner{background:var(--accent-soft);border:1px solid #c9dccc;border-radius:14px;padding:12px 14px;margin-bottom:12px}
+  .today-banner strong{font-size:17px}
+  .today-banner .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  .month-compact-count{display:none}
+  .today .day-num span:first-child{background:var(--accent);color:#fff;border-radius:99px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+
   .week-head>div{padding:10px;text-align:center;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
   .day{min-height:132px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;background:#fff}
   .day:nth-child(7n){border-right:none}.day.muted{background:#fafbfa;color:#a2aaa5}
@@ -69,6 +87,17 @@
     .tabs{grid-template-columns:repeat(2,1fr)}
     .app{padding:12px 10px 90px}
     header{align-items:flex-start;flex-direction:column}
+    .calendar-wrap{overflow:visible}
+    .calendar{min-width:0}
+    .week-head>div{padding:7px 2px;font-size:11px}
+    .day{min-height:62px;padding:5px 3px}
+    .day-num{font-size:11px;margin-bottom:3px}
+    .day .session{display:none}
+    .month-compact-count{display:block;font-size:10px;color:var(--accent);font-weight:800;text-align:center;margin-top:5px}
+    .toolbar{align-items:flex-start}
+    .month-nav{width:100%;justify-content:space-between}
+    .view-switch{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
+    .view-switch .btn{width:100%}
   }
 </style>
 </head>
@@ -76,7 +105,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台</h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.1</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -94,14 +123,15 @@
 
   <section class="panel active" id="schedule">
     <div class="toolbar">
-      <div class="month-nav">
+      <div class="month-nav" id="monthNav">
         <button class="btn" id="prevMonth">‹</button>
         <div class="month-title" id="monthTitle"></div>
         <button class="btn" id="nextMonth">›</button>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" id="todayBtn">本月</button>
-        <button class="btn" id="copyMonthBtn">复制固定课到下月</button>
+      <div class="view-switch">
+        <button class="btn active" data-view="today">今天</button>
+        <button class="btn" data-view="week">本周</button>
+        <button class="btn" data-view="month">月课表</button>
       </div>
     </div>
 
@@ -112,7 +142,8 @@
       <div class="card metric"><div class="label">完成课时</div><div class="value" id="mHours">0h</div><div class="sub">方便看工作量</div></div>
     </div>
 
-    <div class="calendar-wrap">
+    <div id="agendaView"></div>
+    <div class="calendar-wrap" id="calendarWrap" style="display:none">
       <div class="calendar">
         <div class="week-head"><div>周一</div><div>周二</div><div>周三</div><div>周四</div><div>周五</div><div>周六</div><div>周日</div></div>
         <div id="calendarBody"></div>
@@ -133,7 +164,18 @@
       <div class="card metric"><div class="label">保底收入</div><div class="value" id="iFloor">¥0</div><div class="sub">只统计已完成</div></div>
       <div class="card metric"><div class="label">当前预计</div><div class="value" id="iProjected">¥0</div><div class="sub">按当前排课全部正常进行</div></div>
       <div class="card metric"><div class="label">满课收入</div><div class="value" id="iFull">¥0</div><div class="sub">包含本月已取消/请假的原计划收入</div></div>
-      <div class="card metric"><div class="label">本月损失</div><div class="value" id="iLost">¥0</div><div class="sub">请假/取消造成的预计减少</div></div>
+      <div class="card metric"><div class="label">已到账</div><div class="value" id="iReceived">¥0</div><div class="sub">已标记收款</div></div>
+      <div class="card metric"><div class="label">待收款</div><div class="value" id="iPending">¥0</div><div class="sub">已完成但未收款</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="section-title">批量收款</h3>
+      <p class="hint">正常课程会在结束后自动视为“已完成”。收款不强行自动，因为机构工资和私教结算不是一回事，人类偏偏喜欢把钱分很多种时间到账。</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="bulkPaySource" class="btn" style="min-width:150px"></select>
+        <button class="btn primary" id="bulkPaidBtn">将本月已完成标记为已收款</button>
+      </div>
+      <div class="hint" id="bulkPayHint" style="margin-top:8px"></div>
     </div>
 
     <div class="card">
@@ -293,8 +335,24 @@ function getStudent(id){return state.students.find(x=>x.id===id)||{name:'未命�
 function gross(s){return Number(s.hours||0)*Number(s.rate||0)}
 function net(s){const src=getSource(s.sourceId);return gross(s)*(1-Number(src.taxRate||0)/100)}
 function monthSessions(d){const k=monthKey(d);return state.sessions.filter(s=>s.date.startsWith(k))}
-function countsProjected(s){return ['scheduled','completed','makeup'].includes(s.status)}
-function countsEarned(s){return s.status==='completed'}
+function sessionEnd(s){
+  const d=parseDate(s.date);
+  if(s.time){
+    const [hh,mm]=s.time.split(':').map(Number);
+    d.setHours(hh||0,mm||0,0,0);
+    d.setMinutes(d.getMinutes()+Math.round(Number(s.hours||0)*60));
+  }else{
+    d.setHours(23,59,59,999);
+  }
+  return d;
+}
+function effectiveStatus(s){
+  if(['leave','cancelled','completed'].includes(s.status)) return s.status;
+  if(['scheduled','makeup'].includes(s.status) && sessionEnd(s) < new Date()) return 'completed';
+  return s.status;
+}
+function countsProjected(s){return ['scheduled','completed','makeup'].includes(effectiveStatus(s))}
+function countsEarned(s){return effectiveStatus(s)==='completed'}
 function countsLost(s){return ['leave','cancelled'].includes(s.status)}
 
 function renderTabs(){
@@ -303,6 +361,53 @@ function renderTabs(){
     $$('.panel').forEach(x=>x.classList.remove('active'));
     b.classList.add('active'); $('#'+b.dataset.tab).classList.add('active');
   });
+}
+
+
+let scheduleView='today';
+
+function startOfWeek(d){
+  const x=new Date(d); x.setHours(0,0,0,0);
+  const diff=(x.getDay()+6)%7; x.setDate(x.getDate()-diff); return x;
+}
+function renderAgenda(){
+  const host=$('#agendaView'), wrap=$('#calendarWrap'), nav=$('#monthNav');
+  $$('.view-switch .btn').forEach(b=>b.classList.toggle('active',b.dataset.view===scheduleView));
+  if(scheduleView==='month'){
+    host.innerHTML=''; wrap.style.display='block'; nav.style.display='flex'; return;
+  }
+  wrap.style.display='none'; nav.style.display='none';
+  const now=new Date(), today=ymd(now);
+  let days=[];
+  if(scheduleView==='today'){
+    days=[new Date(now.getFullYear(),now.getMonth(),now.getDate())];
+  }else{
+    const st=startOfWeek(now);
+    for(let i=0;i<7;i++){const d=new Date(st);d.setDate(st.getDate()+i);days.push(d)}
+  }
+  const all=state.sessions;
+  const total=days.flatMap(d=>all.filter(s=>s.date===ymd(d))).length;
+  let out=`<div class="today-banner"><strong>${scheduleView==='today'?'今天':'本周'} · ${scheduleView==='today'?`${now.getMonth()+1}月${now.getDate()}日 ${weekdays[now.getDay()]}`:`${days[0].getMonth()+1}/${days[0].getDate()} - ${days[6].getMonth()+1}/${days[6].getDate()}`}</strong><div class="sub">${scheduleView==='today'?`今天共 ${total} 节课`:`本周共 ${total} 节课`}，按时间排列</div></div><div class="agenda">`;
+  days.forEach(d=>{
+    const ds=ymd(d);
+    const arr=all.filter(s=>s.date===ds).sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+    if(scheduleView==='today' || arr.length || ds===today){
+      out+=`<div class="agenda-day ${ds===today?'today-agenda':''}">
+        <div class="agenda-date"><span>${d.getMonth()+1}月${d.getDate()}日 ${weekdays[d.getDay()]}${ds===today?' · 今天':''}</span><small>${arr.length}节</small></div>`;
+      if(!arr.length) out+=`<div class="hint">今天没有课。难得，日历终于肯放过你。</div>`;
+      arr.forEach(s=>{
+        const st=getStudent(s.studentId), src=getSource(s.sourceId), es=effectiveStatus(s);
+        out+=`<div class="agenda-session" data-session="${s.id}">
+          <div class="left"><div class="name">${escapeHtml(st.name)}</div><div class="meta">${escapeHtml(src.name)} · ${statusText[es]||es}${s.paid?' · 已收款':''}</div></div>
+          <div class="right"><strong>${s.time||'未定时间'}</strong><div class="meta">${s.hours}h · ${money(net(s))}</div></div>
+        </div>`;
+      });
+      out+=`</div>`;
+    }
+  });
+  out+=`</div>`;
+  host.innerHTML=out;
+  host.querySelectorAll('[data-session]').forEach(el=>el.onclick=()=>openSession(el.dataset.session));
 }
 
 function renderCalendar(){
@@ -326,9 +431,10 @@ function renderCalendar(){
         return `<div class="session ${statusClass[s.status]||''}" data-session="${s.id}">
           <div class="student">${escapeHtml(st.name)}</div>
           <div>${s.time?escapeHtml(s.time)+' · ':''}${s.hours}h · ${money(net(s))}</div>
-          <div class="meta">${escapeHtml(src.name)} · ${statusText[s.status]||s.status}</div>
+          <div class="meta">${escapeHtml(src.name)} · ${statusText[effectiveStatus(s)]||effectiveStatus(s)}${s.paid?' · 已收款':''}</div>
         </div>`;
       }).join('')}
+      <div class="month-compact-count">${daySessions.length ? daySessions.length+'节' : ''}</div>
     </div>`;
   }
   $('#calendarBody').innerHTML=`<div class="week">${html}</div>`;
@@ -341,6 +447,7 @@ function renderCalendar(){
   const hours=sessions.filter(countsEarned).reduce((a,s)=>a+Number(s.hours||0),0);
   $('#mProjected').textContent=money(projected); $('#mEarned').textContent=money(earned);
   $('#mLost').textContent=money(lost); $('#mHours').textContent=hours.toFixed(1)+'h';
+  renderAgenda();
 }
 
 function renderIncome(){
@@ -349,9 +456,10 @@ function renderIncome(){
   const floor=sessions.filter(countsEarned).reduce((a,s)=>a+net(s),0);
   const projected=sessions.filter(countsProjected).reduce((a,s)=>a+net(s),0);
   const full=sessions.reduce((a,s)=>a+net(s),0);
-  const lost=sessions.filter(countsLost).reduce((a,s)=>a+net(s),0);
+  const received=sessions.filter(s=>s.paid).reduce((a,s)=>a+net(s),0);
+  const pending=sessions.filter(s=>countsEarned(s)&&!s.paid).reduce((a,s)=>a+net(s),0);
   $('#iFloor').textContent=money(floor); $('#iProjected').textContent=money(projected);
-  $('#iFull').textContent=money(full); $('#iLost').textContent=money(lost);
+  $('#iFull').textContent=money(full); $('#iReceived').textContent=money(received); $('#iPending').textContent=money(pending);
 
   const rows=state.sources.map(src=>{
     const arr=sessions.filter(s=>s.sourceId===src.id);
@@ -361,6 +469,14 @@ function renderIncome(){
     return `<tr><td>${escapeHtml(src.name)}</td><td>${money(grossProjected)}</td><td>${src.taxRate}%</td><td>${money(netProjected)}</td><td>${money(netEarned)}</td></tr>`;
   }).join('');
   $('#sourceTable').innerHTML=rows||`<tr><td colspan="5" class="empty">暂无数据</td></tr>`;
+  const sel=$('#bulkPaySource');
+  if(sel){
+    const old=sel.value;
+    sel.innerHTML='<option value="all">全部来源</option>'+state.sources.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    if([...sel.options].some(o=>o.value===old)) sel.value=old;
+    const unpaid=sessions.filter(s=>countsEarned(s)&&!s.paid&&(sel.value==='all'||s.sourceId===sel.value));
+    $('#bulkPayHint').textContent=`当前筛选有 ${unpaid.length} 节已完成但未标记收款的课程。`;
+  }
 }
 
 function renderStudents(){
@@ -533,10 +649,27 @@ renderTabs();initWeekdays();
 $('#quickAdd').onclick=()=>openSession(); $('#openRecurring').onclick=openRecurring; $('#addStudentBtn').onclick=()=>openStudent(); $('#addSourceBtn').onclick=()=>openSource();
 $('#prevMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar()}
 $('#nextMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar()}
-$('#todayBtn').onclick=()=>{const n=new Date();viewMonth=new Date(n.getFullYear(),n.getMonth(),1);renderCalendar()}
-$('#copyMonthBtn').onclick=copyMonthToNext;
 $('#prevIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()-1,1);renderIncome()}
 $('#nextIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()+1,1);renderIncome()}
+
+$$('.view-switch .btn').forEach(b=>b.onclick=()=>{
+  scheduleView=b.dataset.view;
+  if(scheduleView==='month'){
+    const n=new Date(); viewMonth=new Date(n.getFullYear(),n.getMonth(),1);
+  }
+  renderCalendar();
+});
+$('#bulkPaySource').onchange=renderIncome;
+$('#bulkPaidBtn').onclick=()=>{
+  const src=$('#bulkPaySource').value;
+  const sessions=monthSessions(incomeMonth).filter(s=>countsEarned(s)&&!s.paid&&(src==='all'||s.sourceId===src));
+  if(!sessions.length){alert('当前筛选没有待标记收款的已完成课程。');return}
+  const label=src==='all'?'全部来源':getSource(src).name;
+  if(confirm(`确定把 ${monthLabel(incomeMonth)}「${label}」的 ${sessions.length} 节已完成课程批量标记为已收款？`)){
+    sessions.forEach(s=>s.paid=true); save();
+  }
+};
+
 $('#exportBtn').onclick=exportJson;
 $('#resetBtn').onclick=()=>{if(confirm('确定清空全部课表、学生和自定义来源？此操作无法撤销。')){localStorage.removeItem(LS_KEY);state=seed();save()}}
 $('#fStudent').onchange=()=>{const st=getStudent($('#fStudent').value);$('#fSource').value=st.sourceId;$('#fRate').value=st.rate}

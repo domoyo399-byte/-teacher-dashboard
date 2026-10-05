@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V1.1</title>
+<title>自由教师工作台 V1.2</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -51,6 +51,9 @@
   .today-banner strong{font-size:17px}
   .today-banner .sub{font-size:12px;color:var(--muted);margin-top:3px}
   .month-compact-count{display:none}
+  .compact-course{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35;color:var(--accent);font-weight:700}
+  .compact-cancelled{text-decoration:line-through;color:#9aa49d}
+  .compact-more{color:var(--muted);font-weight:600;line-height:1.35}
   .today .day-num span:first-child{background:var(--accent);color:#fff;border-radius:99px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
 
   .week-head>div{padding:10px;text-align:center;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
@@ -90,10 +93,12 @@
     .calendar-wrap{overflow:visible}
     .calendar{min-width:0}
     .week-head>div{padding:7px 2px;font-size:11px}
-    .day{min-height:62px;padding:5px 3px}
+    .day{min-height:82px;padding:5px 3px}
     .day-num{font-size:11px;margin-bottom:3px}
     .day .session{display:none}
-    .month-compact-count{display:block;font-size:10px;color:var(--accent);font-weight:800;text-align:center;margin-top:5px}
+    .month-compact-count{display:block;font-size:9px;text-align:left;margin-top:5px;padding:0 2px;min-width:0}
+    .compact-course{max-width:100%}
+    .compact-more{text-align:left}
     .toolbar{align-items:flex-start}
     .month-nav{width:100%;justify-content:space-between}
     .view-switch{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
@@ -105,7 +110,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.1</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.2</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -434,7 +439,12 @@ function renderCalendar(){
           <div class="meta">${escapeHtml(src.name)} · ${statusText[effectiveStatus(s)]||effectiveStatus(s)}${s.paid?' · 已收款':''}</div>
         </div>`;
       }).join('')}
-      <div class="month-compact-count">${daySessions.length ? daySessions.length+'节' : ''}</div>
+      <div class="month-compact-count">${daySessions.length ? daySessions.slice(0,3).map(s=>{
+        const st=getStudent(s.studentId);
+        const es=effectiveStatus(s);
+        const label=`${s.time||'待定'} ${escapeHtml(st.name)}`;
+        return `<div class="compact-course ${['leave','cancelled'].includes(es)?'compact-cancelled':''}" title="${label}">${label}</div>`;
+      }).join('') + (daySessions.length>3?`<div class="compact-more">+${daySessions.length-3}节</div>`:'') : ''}</div>
     </div>`;
   }
   $('#calendarBody').innerHTML=`<div class="week">${html}</div>`;

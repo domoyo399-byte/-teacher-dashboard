@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V1.5</title>
+<title>自由教师工作台 V1.6</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -51,8 +51,9 @@
   .today-banner strong{font-size:17px}
   .today-banner .sub{font-size:12px;color:var(--muted);margin-top:3px}
   .month-compact-count{display:none}
-  .compact-course{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35;color:var(--accent);font-weight:700}
+  .compact-course{font-family:"Times New Roman",Times,serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35;color:var(--accent);font-weight:700}
   .ru-name{font-family:"Times New Roman",Times,serif}
+  .ru-course{font-family:"Times New Roman",Times,serif}
   .compact-cancelled{text-decoration:line-through;color:#9aa49d}
   .compact-more{color:var(--muted);font-weight:600;line-height:1.35}
   .today .day-num span:first-child{background:var(--accent);color:#fff;border-radius:99px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
@@ -123,7 +124,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.5</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V1.6</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -436,7 +437,7 @@ function renderAgenda(){
       if(!arr.length) out+=`<div class="hint">今天没有课。难得，日历终于肯放过你。</div>`;
       arr.forEach(s=>{
         const st=getStudent(s.studentId), src=getSource(s.sourceId), es=effectiveStatus(s);
-        out+=`<div class="agenda-session" data-session="${s.id}">
+        out+=`<div class="agenda-session ${/[А-Яа-яЁё]/.test(st.name)?'ru-course':''}" data-session="${s.id}">
           <div class="left"><div class="name ${/[А-Яа-яЁё]/.test(st.name)?'ru-name':''}">${escapeHtml(st.name)}</div><div class="meta">${escapeHtml(src.name)} · ${statusText[es]||es}${s.paid?' · 已收款':''}</div></div>
           <div class="right"><strong>${s.time||'未定时间'}</strong><div class="meta">${s.hours}h · ${money(net(s))}</div></div>
         </div>`;

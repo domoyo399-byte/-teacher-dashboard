@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V2.1</title>
+<title>自由教师工作台 V2.2</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -146,7 +146,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.1</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.2</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -174,8 +174,9 @@
         <button class="btn" data-view="week">本周</button>
         <button class="btn" data-view="month">月课表</button>
       </div>
-      <div id="monthCopyActions" style="display:none;width:100%;justify-content:flex-end">
+      <div id="monthCopyActions" style="display:none;width:100%;justify-content:flex-end;gap:8px;flex-wrap:wrap">
         <button class="btn" id="copyMonthBtn">复制固定课到下月</button>
+        <button class="btn danger" id="undoCopyMonthBtn" style="display:none">撤销上次复制</button>
       </div>
     </div>
 
@@ -460,6 +461,11 @@ function renderTabs(){
 
 
 let scheduleView='today';
+let lastMonthCopy=null;
+function refreshUndoCopyButton(){
+  const b=$('#undoCopyMonthBtn');
+  if(b)b.style.display=(lastMonthCopy&&lastMonthCopy.ids&&lastMonthCopy.ids.length)?'inline-block':'none';
+}
 
 function startOfWeek(d){
   const x=new Date(d); x.setHours(0,0,0,0);
@@ -793,21 +799,37 @@ function copyMonthToNext(){
   const from=monthSessions(viewMonth).filter(s=>s.recurring&&['scheduled','completed','makeup'].includes(s.status));
   if(!from.length){alert('本月没有标记为周期课的课程可复制。');return}
   const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
-  let added=0;
+  const addedIds=[];
   from.forEach(s=>{
     const d=parseDate(s.date), targetWeekday=d.getDay();
-    // 用“同一周序 + 同星期”映射到下月
     const nth=Math.floor((d.getDate()-1)/7);
     const first=new Date(next.getFullYear(),next.getMonth(),1);
-    let delta=(targetWeekday-first.getDay()+7)%7;
+    const delta=(targetWeekday-first.getDay()+7)%7;
     const td=1+delta+nth*7;
     const target=new Date(next.getFullYear(),next.getMonth(),td);
     if(target.getMonth()!==next.getMonth())return;
     const date=ymd(target);
     const exists=state.sessions.some(x=>x.date===date&&x.studentId===s.studentId&&x.time===s.time);
-    if(!exists){state.sessions.push({...s,id:uid(),date,status:'scheduled',paid:false});added++}
+    if(!exists){
+      const id=uid();
+      state.sessions.push({...s,id,date,status:'scheduled',paid:false});
+      addedIds.push(id);
+    }
   });
-  save();alert(`已复制 ${added} 节到 ${monthLabel(next)}。你可以再按实际请假/停课调整。`);
+  if(addedIds.length)lastMonthCopy={ids:addedIds,from:monthLabel(viewMonth),to:monthLabel(next)};
+  save();refreshUndoCopyButton();
+  alert(`已复制 ${addedIds.length} 节到 ${monthLabel(next)}。如果结果不对，可以点“撤销上次复制”。`);
+}
+function undoLastMonthCopy(){
+  if(!lastMonthCopy||!lastMonthCopy.ids?.length){alert('当前没有可撤销的月课表复制。');return}
+  const ids=new Set(lastMonthCopy.ids);
+  const removable=state.sessions.filter(s=>ids.has(s.id));
+  if(!removable.length){lastMonthCopy=null;refreshUndoCopyButton();alert('上次复制新增的课程已经不存在，无需撤销。');return}
+  if(!confirm(`确定撤销上次从 ${lastMonthCopy.from} 到 ${lastMonthCopy.to} 的复制？\n将删除那次新增加的 ${removable.length} 节课，不会影响原本已经存在的课程。`))return;
+  state.sessions=state.sessions.filter(s=>!ids.has(s.id));
+  lastMonthCopy=null;
+  save();refreshUndoCopyButton();
+  alert(`已撤销上次复制，删除 ${removable.length} 节由该次复制新增的课程。`);
 }
 
 function exportJson(){
@@ -832,6 +854,7 @@ $('#quickAdd').onclick=()=>openSession(); $('#openRecurring').onclick=openRecurr
 $('#prevMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar()}
 $('#nextMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar()}
 $('#copyMonthBtn').onclick=copyMonthToNext;
+$('#undoCopyMonthBtn').onclick=undoLastMonthCopy;
 $('#prevIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()-1,1);renderIncome()}
 $('#nextIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()+1,1);renderIncome()}
 

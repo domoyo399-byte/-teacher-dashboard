@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V2.3</title>
+<title>自由教师工作台 V2.4</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -155,7 +155,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.3</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.4</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -185,7 +185,6 @@
       </div>
       <div id="monthCopyActions" style="display:none;width:100%;justify-content:flex-end;gap:8px;flex-wrap:wrap">
         <button class="btn" id="copyMonthBtn">复制固定课到下月</button>
-        <button class="btn danger" id="undoCopyMonthBtn" style="display:none">撤销上次复制</button>
       </div>
     </div>
 
@@ -263,6 +262,12 @@
       <p class="hint">默认已经放入「新东方 20%代扣」和「私教 0%」。这里的比例用于估算当月现金到账，不等同于年度最终应纳税额。</p>
       <div class="list" id="sourceList"></div>
       <button class="btn" id="addSourceBtn" style="margin-top:10px">＋ 添加来源</button>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="section-title">课表操作</h3>
+      <p class="hint" id="undoCopyHint">这里保留最近一次“复制固定课到下月”的撤销记录。刷新或重新打开网页后仍可使用，直到下一次复制覆盖它。</p>
+      <button class="btn danger" id="undoCopyMonthBtn" disabled>撤销最近一次月课表复制</button>
     </div>
 
     <div class="card">
@@ -487,11 +492,23 @@ function renderTabs(){
 
 
 let scheduleView='today';
+const UNDO_COPY_KEY='teacher_dashboard_last_month_copy_v1';
 let lastMonthCopy=null;
+try{lastMonthCopy=JSON.parse(localStorage.getItem(UNDO_COPY_KEY)||'null')}catch(e){lastMonthCopy=null}
 let copyMonthPatterns=[];
+function persistLastMonthCopy(){
+  if(lastMonthCopy)localStorage.setItem(UNDO_COPY_KEY,JSON.stringify(lastMonthCopy));
+  else localStorage.removeItem(UNDO_COPY_KEY);
+}
 function refreshUndoCopyButton(){
-  const b=$('#undoCopyMonthBtn');
-  if(b)b.style.display=(lastMonthCopy&&lastMonthCopy.ids&&lastMonthCopy.ids.length)?'inline-block':'none';
+  const b=$('#undoCopyMonthBtn'), hint=$('#undoCopyHint');
+  const usable=!!(lastMonthCopy&&lastMonthCopy.ids&&lastMonthCopy.ids.length);
+  if(b)b.disabled=!usable;
+  if(hint){
+    hint.textContent=usable
+      ? `可撤销：${lastMonthCopy.from} → ${lastMonthCopy.to}，最近一次复制新增 ${lastMonthCopy.ids.length} 节课。`
+      : '当前没有可撤销的月课表复制记录。之后每次复制成功都会在这里留下一个撤销点。';
+  }
 }
 
 function startOfWeek(d){
@@ -907,7 +924,10 @@ function confirmCopyMonth(){
     });
   });
   const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
-  if(addedIds.length)lastMonthCopy={ids:addedIds,from:monthLabel(viewMonth),to:monthLabel(next)};
+  if(addedIds.length){
+    lastMonthCopy={ids:addedIds,from:monthLabel(viewMonth),to:monthLabel(next)};
+    persistLastMonthCopy();
+  }
   $('#copyMonthDialog').close();
   save();refreshUndoCopyButton();
   alert(`已复制 ${addedIds.length} 节到 ${monthLabel(next)}。如果结果不对，可以点“撤销上次复制”。`);
@@ -917,10 +937,11 @@ function undoLastMonthCopy(){
   if(!lastMonthCopy||!lastMonthCopy.ids?.length){alert('当前没有可撤销的月课表复制。');return}
   const ids=new Set(lastMonthCopy.ids);
   const removable=state.sessions.filter(s=>ids.has(s.id));
-  if(!removable.length){lastMonthCopy=null;refreshUndoCopyButton();alert('上次复制新增的课程已经不存在，无需撤销。');return}
+  if(!removable.length){lastMonthCopy=null;persistLastMonthCopy();refreshUndoCopyButton();alert('上次复制新增的课程已经不存在，无需撤销。');return}
   if(!confirm(`确定撤销上次从 ${lastMonthCopy.from} 到 ${lastMonthCopy.to} 的复制？\n将删除那次新增加的 ${removable.length} 节课，不会影响原本已经存在的课程。`))return;
   state.sessions=state.sessions.filter(s=>!ids.has(s.id));
   lastMonthCopy=null;
+  persistLastMonthCopy();
   save();refreshUndoCopyButton();
   alert(`已撤销上次复制，删除 ${removable.length} 节由该次复制新增的课程。`);
 }
@@ -1012,6 +1033,7 @@ $('#fStudent').onchange=()=>{const st=getStudent($('#fStudent').value);$('#fSour
 $('#rStudent').onchange=()=>{const st=getStudent($('#rStudent').value);$('#rSource').value=st.sourceId;$('#rRate').value=st.rate}
 
 renderAll();
+refreshUndoCopyButton();
 </script>
 </body>
 </html>

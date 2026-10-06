@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自由教师工作台 V2.2</title>
+<title>自由教师工作台 V2.3</title>
 <style>
   :root{
     --bg:#f6f7f5; --card:#ffffff; --text:#1f2a24; --muted:#6f7d74;
@@ -140,13 +140,22 @@
   .overview-toggle.open .chev{transform:rotate(180deg)}
   #scheduleMetrics{display:none !important;}
   #scheduleMetrics.open{display:grid !important;}
+
+  /* V2.3 固定课复制预览 */
+  .copy-pattern-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}
+  .copy-pattern-item{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff}
+  .copy-pattern-item input{margin-top:3px;transform:scale(1.15)}
+  .copy-pattern-main{min-width:0;flex:1}
+  .copy-pattern-title{font-weight:800}
+  .copy-pattern-meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .copy-preview-summary{background:#f7faf7;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0;font-weight:700}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="brand">
-      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.2</span></h1>
+      <h1>自由教师工作台 <span style="font-size:12px;color:var(--muted);font-weight:600">V2.3</span></h1>
       <p>课表是唯一数据源，收入页自动跟着变化。</p>
     </div>
     <div class="top-actions">
@@ -339,6 +348,23 @@
 
 
 
+
+<dialog id="copyMonthDialog">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="copyMonthTitle">复制固定课到下月</h3>
+      <button class="btn" id="closeCopyMonthBtn">关闭</button>
+    </div>
+    <p class="hint" id="copyMonthHint">系统会根据本月实际课程识别重复规律。请勾选下个月仍继续的固定课。</p>
+    <div class="copy-pattern-list" id="copyPatternList"></div>
+    <div class="copy-preview-summary" id="copyPreviewSummary">预计生成 0 节课</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn" id="cancelCopyMonthBtn">取消</button>
+      <button class="btn primary" id="confirmCopyMonthBtn">确认复制</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="dayDetailDialog">
   <div class="modal">
     <div class="modal-head">
@@ -462,6 +488,7 @@ function renderTabs(){
 
 let scheduleView='today';
 let lastMonthCopy=null;
+let copyMonthPatterns=[];
 function refreshUndoCopyButton(){
   const b=$('#undoCopyMonthBtn');
   if(b)b.style.display=(lastMonthCopy&&lastMonthCopy.ids&&lastMonthCopy.ids.length)?'inline-block':'none';
@@ -795,31 +822,97 @@ function deleteSource(id){
   if(confirm('确定删除收入来源？')){state.sources=state.sources.filter(x=>x.id!==id);save()}
 }
 
-function copyMonthToNext(){
-  const from=monthSessions(viewMonth).filter(s=>s.recurring&&['scheduled','completed','makeup'].includes(s.status));
-  if(!from.length){alert('本月没有标记为周期课的课程可复制。');return}
-  const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
-  const addedIds=[];
-  from.forEach(s=>{
-    const d=parseDate(s.date), targetWeekday=d.getDay();
-    const nth=Math.floor((d.getDate()-1)/7);
-    const first=new Date(next.getFullYear(),next.getMonth(),1);
-    const delta=(targetWeekday-first.getDay()+7)%7;
-    const td=1+delta+nth*7;
-    const target=new Date(next.getFullYear(),next.getMonth(),td);
-    if(target.getMonth()!==next.getMonth())return;
-    const date=ymd(target);
-    const exists=state.sessions.some(x=>x.date===date&&x.studentId===s.studentId&&x.time===s.time);
-    if(!exists){
-      const id=uid();
-      state.sessions.push({...s,id,date,status:'scheduled',paid:false});
-      addedIds.push(id);
-    }
+function inferFixedPatternsForMonth(){
+  const sessions=monthSessions(viewMonth).filter(s=>['scheduled','completed','makeup'].includes(effectiveStatus(s)));
+  const groups=new Map();
+  sessions.forEach(s=>{
+    const d=parseDate(s.date);
+    const key=[s.studentId,d.getDay(),s.time||'',Number(s.hours||0),s.sourceId].join('|');
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(s);
   });
+  const patterns=[];
+  groups.forEach(arr=>{
+    arr.sort((a,b)=>a.date.localeCompare(b.date));
+    const recurring=arr.some(s=>s.recurring);
+    // 自动识别：本月同一学生、同星期、同时间出现至少2次；原周期课即使本月只出现1次也列入候选。
+    if(arr.length<2 && !recurring)return;
+    const sample=arr[0], d=parseDate(sample.date), st=getStudent(sample.studentId);
+    patterns.push({
+      id:uid(),studentId:sample.studentId,sourceId:sample.sourceId,weekday:d.getDay(),
+      time:sample.time||'',hours:Number(sample.hours||0),rate:Number(sample.rate||0),
+      note:sample.note||'',detectedCount:arr.length,recurring
+    });
+  });
+  return patterns.sort((a,b)=>a.weekday-b.weekday||a.time.localeCompare(b.time));
+}
+function datesForPatternInNextMonth(pat){
+  const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
+  const out=[];
+  for(let d=new Date(next);d.getMonth()===next.getMonth();d.setDate(d.getDate()+1)){
+    if(d.getDay()===pat.weekday)out.push(ymd(d));
+  }
+  return out;
+}
+function updateCopyPreview(){
+  const selected=new Set($$('#copyPatternList input[type="checkbox"]:checked').map(x=>x.value));
+  let count=0;
+  copyMonthPatterns.forEach(p=>{
+    if(!selected.has(p.id))return;
+    datesForPatternInNextMonth(p).forEach(date=>{
+      const exists=state.sessions.some(s=>s.date===date&&s.studentId===p.studentId&&s.time===p.time);
+      if(!exists)count++;
+    });
+  });
+  $('#copyPreviewSummary').textContent=`预计新生成 ${count} 节课（已存在的同学生同时间课程会自动跳过）`;
+}
+function copyMonthToNext(){
+  copyMonthPatterns=inferFixedPatternsForMonth();
+  if(!copyMonthPatterns.length){
+    alert('本月暂时没有识别到固定规律。系统会识别“同一学生 + 同星期 + 同时间”至少出现 2 次的课程，以及已标记为周期课的课程。');
+    return;
+  }
+  const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
+  $('#copyMonthTitle').textContent=`复制 ${monthLabel(viewMonth)} 固定课到 ${monthLabel(next)}`;
+  const weekdayNames=['周日','周一','周二','周三','周四','周五','周六'];
+  $('#copyPatternList').innerHTML=copyMonthPatterns.map(p=>{
+    const st=getStudent(p.studentId), ru=/[А-Яа-яЁё]/.test(st.name);
+    return `<label class="copy-pattern-item">
+      <input type="checkbox" value="${p.id}" checked>
+      <div class="copy-pattern-main">
+        <div class="copy-pattern-title ${ru?'ru-course':''}"><span class="${ru?'ru-name':''}">${escapeHtml(st.name)}</span> · ${weekdayNames[p.weekday]} ${p.time||'未定时间'}</div>
+        <div class="copy-pattern-meta">${p.hours}h · 本月出现 ${p.detectedCount} 次${p.recurring?' · 原周期课':''}</div>
+      </div>
+    </label>`;
+  }).join('');
+  $$('#copyPatternList input[type="checkbox"]').forEach(x=>x.onchange=updateCopyPreview);
+  updateCopyPreview();
+  $('#copyMonthDialog').showModal();
+}
+function confirmCopyMonth(){
+  const selected=new Set($$('#copyPatternList input[type="checkbox"]:checked').map(x=>x.value));
+  if(!selected.size){alert('请至少勾选一条要复制的固定课。');return}
+  const addedIds=[];
+  copyMonthPatterns.forEach(p=>{
+    if(!selected.has(p.id))return;
+    datesForPatternInNextMonth(p).forEach(date=>{
+      const exists=state.sessions.some(s=>s.date===date&&s.studentId===p.studentId&&s.time===p.time);
+      if(exists)return;
+      const id=uid();
+      state.sessions.push({
+        id,studentId:p.studentId,sourceId:p.sourceId,date,time:p.time,hours:p.hours,rate:p.rate,
+        status:'scheduled',paid:false,note:p.note,recurring:true
+      });
+      addedIds.push(id);
+    });
+  });
+  const next=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);
   if(addedIds.length)lastMonthCopy={ids:addedIds,from:monthLabel(viewMonth),to:monthLabel(next)};
+  $('#copyMonthDialog').close();
   save();refreshUndoCopyButton();
   alert(`已复制 ${addedIds.length} 节到 ${monthLabel(next)}。如果结果不对，可以点“撤销上次复制”。`);
 }
+
 function undoLastMonthCopy(){
   if(!lastMonthCopy||!lastMonthCopy.ids?.length){alert('当前没有可撤销的月课表复制。');return}
   const ids=new Set(lastMonthCopy.ids);
@@ -855,6 +948,9 @@ $('#prevMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMont
 $('#nextMonth').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar()}
 $('#copyMonthBtn').onclick=copyMonthToNext;
 $('#undoCopyMonthBtn').onclick=undoLastMonthCopy;
+$('#closeCopyMonthBtn').onclick=()=>$('#copyMonthDialog').close();
+$('#cancelCopyMonthBtn').onclick=()=>$('#copyMonthDialog').close();
+$('#confirmCopyMonthBtn').onclick=confirmCopyMonth;
 $('#prevIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()-1,1);renderIncome()}
 $('#nextIncomeMonth').onclick=()=>{incomeMonth=new Date(incomeMonth.getFullYear(),incomeMonth.getMonth()+1,1);renderIncome()}
 
